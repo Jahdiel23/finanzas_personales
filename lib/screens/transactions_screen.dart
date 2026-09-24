@@ -5,9 +5,7 @@ import '../services/transaction_service.dart';
 import 'add_transaction_screen.dart';
 
 class TransactionsScreen extends StatefulWidget {
-  const TransactionsScreen({
-    super.key,
-  });
+  const TransactionsScreen({super.key});
 
   @override
   State<TransactionsScreen> createState() =>
@@ -21,360 +19,294 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   List<Transaction> transactions = [];
 
   bool isLoading = true;
+  String? errorMessage;
 
   @override
   void initState() {
     super.initState();
-
     loadTransactions();
   }
 
   Future<void> loadTransactions() async {
-    final savedTransactions =
-        await transactionService.loadTransactions();
-
-    if (!mounted) {
-      return;
-    }
-
     setState(() {
-      transactions = savedTransactions;
-      isLoading = false;
-    });
-  }
-
-  Future<void> addTransaction() async {
-    final result =
-        await Navigator.push<Map<String, dynamic>>(
-      context,
-      MaterialPageRoute(
-        builder: (context) =>
-            const AddTransactionScreen(),
-      ),
-    );
-
-    if (result == null) {
-      return;
-    }
-
-    final newTransaction = Transaction(
-      id: DateTime.now().millisecondsSinceEpoch,
-      title: result['title'],
-      description: '',
-      amount: result['amount'],
-      category: result['category'],
-      date: DateTime.now(),
-      type: result['type'] == 'Ingreso'
-          ? TransactionType.income
-          : TransactionType.expense,
-    );
-
-    setState(() {
-      transactions.add(newTransaction);
+      isLoading = true;
+      errorMessage = null;
     });
 
-    await transactionService.saveTransactions(
-      transactions,
-    );
+    try {
+      final savedTransactions =
+          await transactionService.loadTransactions();
 
-    if (!mounted) {
-      return;
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        transactions = savedTransactions;
+        isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        isLoading = false;
+        errorMessage = e.toString();
+      });
     }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Movimiento guardado',
-        ),
-      ),
-    );
   }
 
-  Future<void> editTransaction(
-    Transaction transaction,
-  ) async {
-    final result =
-        await Navigator.push<Map<String, dynamic>>(
-      context,
-      MaterialPageRoute(
-        builder: (context) =>
-            AddTransactionScreen(
-          transactionData: {
-            'title': transaction.title,
-            'amount': transaction.amount,
-            'category': transaction.category,
-            'type':
-                transaction.type == TransactionType.income
-                    ? 'Ingreso'
-                    : 'Gasto',
-          },
-        ),
-      ),
-    );
-
-    if (result == null) {
-      return;
-    }
-
-    final index = transactions.indexWhere(
-      (item) => item.id == transaction.id,
-    );
-
-    if (index == -1) {
-      return;
-    }
-
-    final updatedTransaction = Transaction(
-      id: transaction.id,
-      title: result['title'],
-      description: transaction.description,
-      amount: result['amount'],
-      category: result['category'],
-      date: transaction.date,
-      type: result['type'] == 'Ingreso'
-          ? TransactionType.income
-          : TransactionType.expense,
-    );
-
-    setState(() {
-      transactions[index] =
-          updatedTransaction;
-    });
-
-    await transactionService.saveTransactions(
-      transactions,
-    );
-
-    if (!mounted) {
-      return;
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Movimiento actualizado',
-        ),
-      ),
-    );
-  }
-
-  Future<void> deleteTransaction(
-    Transaction transaction,
-  ) async {
-    setState(() {
-      transactions.removeWhere(
-        (item) =>
-            item.id == transaction.id,
-      );
-    });
-
-    await transactionService.saveTransactions(
-      transactions,
-    );
-
-    if (!mounted) {
-      return;
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Movimiento eliminado',
-        ),
-      ),
-    );
-  }
-
-  void confirmDelete(
-    Transaction transaction,
-  ) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text(
-            'Eliminar movimiento',
-          ),
-          content: Text(
-            '¿Deseas eliminar "${transaction.title}"?',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              child: const Text(
-                'Cancelar',
-              ),
-            ),
-            FilledButton(
-              onPressed: () {
-                Navigator.pop(context);
-
-                deleteTransaction(
-                  transaction,
-                );
-              },
-              child: const Text(
-                'Eliminar',
-              ),
-            ),
-          ],
-        );
-      },
-    );
+  String formatMoney(double amount) {
+    return '\$${amount.toStringAsFixed(2)}';
   }
 
   @override
   Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Movimientos'),
+      ),
+      body: RefreshIndicator(
+        onRefresh: loadTransactions,
+        child: _buildBody(),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () async {
+          final result = await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const AddTransactionScreen(),
+            ),
+          );
+
+          if (result == true) {
+            loadTransactions();
+          }
+        },
+        child: const Icon(Icons.add),
+      ),
+    );
+  }
+
+  Widget _buildBody() {
     if (isLoading) {
-      return const Scaffold(
-        body: Center(
-          child:
-              CircularProgressIndicator(),
-        ),
+      return ListView(
+        children: [
+          const SizedBox(
+            height: 300,
+            child: Center(
+              child: CircularProgressIndicator(),
+            ),
+          ),
+        ],
       );
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Movimientos',
-        ),
-      ),
-      body: transactions.isEmpty
-          ? const Center(
-              child: Column(
-                mainAxisAlignment:
-                    MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.receipt_long_outlined,
-                    size: 70,
+    if (errorMessage != null) {
+      return ListView(
+        padding: const EdgeInsets.all(24),
+        children: [
+          const SizedBox(height: 80),
+
+          const Icon(
+            Icons.error_outline,
+            size: 60,
+            color: Colors.red,
+          ),
+
+          const SizedBox(height: 16),
+
+          const Center(
+            child: Text(
+              'No se pudieron cargar los movimientos',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 10),
+
+          Text(
+            errorMessage!,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Colors.grey,
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          ElevatedButton(
+            onPressed: loadTransactions,
+            child: const Text('Reintentar'),
+          ),
+        ],
+      );
+    }
+
+    if (transactions.isEmpty) {
+      return ListView(
+        padding: const EdgeInsets.all(24),
+        children: const [
+          SizedBox(height: 100),
+
+          Icon(
+            Icons.receipt_long_outlined,
+            size: 70,
+            color: Colors.grey,
+          ),
+
+          SizedBox(height: 16),
+
+          Center(
+            child: Text(
+              'No hay movimientos todavía',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+
+          SizedBox(height: 8),
+
+          Center(
+            child: Text(
+              'Los movimientos aparecerán aquí.',
+              style: TextStyle(
+                color: Colors.grey,
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.all(16),
+      itemCount: transactions.length,
+      itemBuilder: (context, index) {
+        final transaction = transactions[index];
+
+        final isIncome =
+            transaction.type == TransactionType.income;
+
+        return Dismissible(
+          key: Key(transaction.id.toString()),
+          direction: DismissDirection.endToStart,
+          background: Container(
+            alignment: Alignment.centerRight,
+            padding: const EdgeInsets.only(right: 20),
+            color: Colors.red,
+            child: const Icon(
+              Icons.delete,
+              color: Colors.white,
+            ),
+          ),
+          confirmDismiss: (direction) async {
+            return await showDialog(
+              context: context,
+              builder: (BuildContext context) {
+                return AlertDialog(
+                  title: const Text("Eliminar movimiento"),
+                  content: const Text(
+                    "¿Estás seguro de que deseas eliminar este registro?",
                   ),
-                  SizedBox(
-                    height: 16,
-                  ),
-                  Text(
-                    'No hay movimientos todavía',
-                    style: TextStyle(
-                      fontSize: 18,
+                  actions: [
+                    TextButton(
+                      onPressed: () =>
+                          Navigator.of(context).pop(false),
+                      child: const Text("Cancelar"),
                     ),
-                  ),
-                  SizedBox(
-                    height: 8,
-                  ),
+                    TextButton(
+                      onPressed: () =>
+                          Navigator.of(context).pop(true),
+                      child: const Text(
+                        "Eliminar",
+                        style: TextStyle(color: Colors.red),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+          onDismissed: (direction) async {
+            try {
+              await transactionService
+                  .deleteTransaction(transaction.id!);
+
+              if (!mounted) return;
+
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content:
+                      Text('Movimiento eliminado correctamente'),
+                ),
+              );
+            } catch (e) {
+              loadTransactions();
+              if (!mounted) return;
+
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Error al eliminar: $e'),
+                ),
+              );
+            }
+          },
+          child: Card(
+            margin: const EdgeInsets.only(bottom: 12),
+            child: ListTile(
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 8,
+              ),
+              leading: CircleAvatar(
+                child: Icon(
+                  isIncome
+                      ? Icons.arrow_upward
+                      : Icons.arrow_downward,
+                ),
+              ),
+              title: Text(
+                transaction.title,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 4),
+
+                  Text(transaction.category),
+
+                  const SizedBox(height: 2),
+
                   Text(
-                    'Presiona + para agregar uno',
+                    '${transaction.date.day}/${transaction.date.month}/${transaction.date.year}',
                   ),
                 ],
               ),
-            )
-          : RefreshIndicator(
-              onRefresh: loadTransactions,
-              child: ListView.builder(
-                padding:
-                    const EdgeInsets.all(
-                  16,
+              trailing: Text(
+                '${isIncome ? '+' : '-'}${formatMoney(transaction.amount)}',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: isIncome
+                      ? Colors.green
+                      : Colors.red,
                 ),
-                itemCount:
-                    transactions.length,
-                itemBuilder:
-                    (context, index) {
-                  final transaction =
-                      transactions[index];
-
-                  final isIncome =
-                      transaction.type ==
-                          TransactionType.income;
-
-                  return Card(
-                    margin:
-                        const EdgeInsets.only(
-                      bottom: 12,
-                    ),
-                    child: ListTile(
-                      onTap: () {
-                        editTransaction(
-                          transaction,
-                        );
-                      },
-                      leading:
-                          CircleAvatar(
-                        child: Icon(
-                          isIncome
-                              ? Icons.arrow_upward
-                              : Icons.arrow_downward,
-                        ),
-                      ),
-                      title: Text(
-                        transaction.title,
-                      ),
-                      subtitle: Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            transaction.category,
-                          ),
-                          const SizedBox(
-                            height: 2,
-                          ),
-                          Text(
-                            '${transaction.date.day}/${transaction.date.month}/${transaction.date.year}',
-                          ),
-                        ],
-                      ),
-                      trailing: Row(
-                        mainAxisSize:
-                            MainAxisSize.min,
-                        children: [
-                          Text(
-                            '${isIncome ? '+' : '-'}\$${transaction.amount.toStringAsFixed(2)}',
-                            style: TextStyle(
-                              fontWeight:
-                                  FontWeight.bold,
-                              color: isIncome
-                                  ? Colors.green
-                                  : Colors.red,
-                            ),
-                          ),
-                          IconButton(
-                            tooltip: 'Editar',
-                            onPressed: () {
-                              editTransaction(
-                                transaction,
-                              );
-                            },
-                            icon: const Icon(
-                              Icons.edit_outlined,
-                            ),
-                          ),
-                          IconButton(
-                            tooltip: 'Eliminar',
-                            onPressed: () {
-                              confirmDelete(
-                                transaction,
-                              );
-                            },
-                            icon: const Icon(
-                              Icons.delete_outline,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
               ),
             ),
-      floatingActionButton:
-          FloatingActionButton(
-        onPressed: addTransaction,
-        child: const Icon(
-          Icons.add,
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../models/transaction.dart';
+import '../services/transaction_service.dart';
+
 class AddTransactionScreen extends StatefulWidget {
   final Map<String, dynamic>? transactionData;
 
@@ -17,11 +20,16 @@ class AddTransactionScreen extends StatefulWidget {
 class _AddTransactionScreenState extends State<AddTransactionScreen> {
   final formKey = GlobalKey<FormState>();
 
+  final TransactionService transactionService =
+      TransactionService();
+
   String type = 'Gasto';
 
   final titleController = TextEditingController();
   final amountController = TextEditingController();
   final categoryController = TextEditingController();
+
+  bool isSaving = false;
 
   bool get isEditing => widget.transactionData != null;
 
@@ -55,7 +63,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     super.dispose();
   }
 
-  void saveTransaction() {
+  Future<void> saveTransaction() async {
     FocusScope.of(context).unfocus();
 
     if (!formKey.currentState!.validate()) {
@@ -76,15 +84,76 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     final amount =
         double.parse(amountText);
 
-    Navigator.pop(
-      context,
-      {
-        'title': title,
-        'amount': amount,
-        'category': category,
-        'type': type,
-      },
-    );
+    // Por ahora conservamos el comportamiento
+    // original cuando se está editando.
+    if (isEditing) {
+      Navigator.pop(
+        context,
+        {
+          'title': title,
+          'amount': amount,
+          'category': category,
+          'type': type,
+        },
+      );
+
+      return;
+    }
+
+    setState(() {
+      isSaving = true;
+    });
+
+    try {
+      final transaction = Transaction(
+        id: 0,
+        title: title,
+        description: '',
+        amount: amount,
+        category: category,
+        date: DateTime.now(),
+        type: type == 'Ingreso'
+            ? TransactionType.income
+            : TransactionType.expense,
+      );
+
+      await transactionService.createTransaction(
+        transaction,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Movimiento guardado correctamente',
+          ),
+        ),
+      );
+
+      Navigator.pop(
+        context,
+        true,
+      );
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        isSaving = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'No se pudo guardar el movimiento: $e',
+          ),
+        ),
+      );
+    }
   }
 
   @override
@@ -308,7 +377,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
                 FilledButton.icon(
                   onPressed:
-                      saveTransaction,
+                      isSaving
+                          ? null
+                          : saveTransaction,
 
                   icon: Icon(
                     isEditing
@@ -337,11 +408,13 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                 ),
 
                 TextButton(
-                  onPressed: () {
-                    Navigator.pop(
-                      context,
-                    );
-                  },
+                  onPressed: isSaving
+                      ? null
+                      : () {
+                          Navigator.pop(
+                            context,
+                          );
+                        },
                   child: const Text(
                     'Cancelar',
                   ),

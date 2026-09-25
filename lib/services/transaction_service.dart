@@ -77,7 +77,7 @@ class TransactionService {
     );
   }
 
-  // NUEVO: Método para eliminar un movimiento por ID
+  // Método para eliminar un movimiento por ID
   Future<void> deleteTransaction(int id) async {
     final response = await http.delete(
       Uri.parse('$baseUrl/$id'),
@@ -88,5 +88,48 @@ class TransactionService {
         'Error al eliminar el movimiento: ${response.statusCode}',
       );
     }
+  }
+
+  // NUEVO: Método para actualizar un movimiento existente por ID (PUT)
+  Future<Transaction> updateTransaction(int id, Transaction transaction) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/$id'),
+      headers: {
+        'Content-Type': 'application/json; charset=UTF-8',
+      },
+      body: jsonEncode({
+        'titulo': transaction.title,
+        'descripcion': transaction.description,
+        'monto': transaction.amount,
+        'categoria': transaction.category,
+        'fecha': transaction.date
+            .toIso8601String()
+            .split('T')
+            .first,
+        'tipo': transaction.type == TransactionType.income
+            ? 'INGRESO'
+            : 'GASTO',
+      }),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        'Error al actualizar el movimiento: ${response.statusCode}',
+      );
+    }
+
+    final data = jsonDecode(response.body);
+
+    return Transaction(
+      id: (data['id'] as num).toInt(),
+      title: data['titulo'] as String,
+      description: data['descripcion'] ?? '',
+      amount: (data['monto'] as num).toDouble(),
+      category: data['categoria'] as String,
+      date: DateTime.parse(data['fecha'] as String),
+      type: data['tipo'] == 'INGRESO'
+          ? TransactionType.income
+          : TransactionType.expense,
+    );
   }
 }

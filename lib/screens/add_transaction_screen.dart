@@ -5,11 +5,11 @@ import '../models/transaction.dart';
 import '../services/transaction_service.dart';
 
 class AddTransactionScreen extends StatefulWidget {
-  final Map<String, dynamic>? transactionData;
+  final Transaction? transactionToEdit;
 
   const AddTransactionScreen({
     super.key,
-    this.transactionData,
+    this.transactionToEdit,
   });
 
   @override
@@ -31,26 +31,19 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
   bool isSaving = false;
 
-  bool get isEditing => widget.transactionData != null;
+  bool get isEditing => widget.transactionToEdit != null;
 
   @override
   void initState() {
     super.initState();
 
     if (isEditing) {
-      final data = widget.transactionData!;
+      final transaction = widget.transactionToEdit!;
 
-      titleController.text =
-          data['title']?.toString() ?? '';
-
-      amountController.text =
-          data['amount']?.toString() ?? '';
-
-      categoryController.text =
-          data['category']?.toString() ?? '';
-
-      type =
-          data['type']?.toString() ?? 'Gasto';
+      titleController.text = transaction.title;
+      amountController.text = transaction.amount.toString();
+      categoryController.text = transaction.category;
+      type = transaction.type == TransactionType.income ? 'Ingreso' : 'Gasto';
     }
   }
 
@@ -70,77 +63,70 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       return;
     }
 
-    final title =
-        titleController.text.trim();
-
-    final category =
-        categoryController.text.trim();
-
-    final amountText =
-        amountController.text
-            .trim()
-            .replaceAll(',', '.');
-
-    final amount =
-        double.parse(amountText);
-
-    // Por ahora conservamos el comportamiento
-    // original cuando se está editando.
-    if (isEditing) {
-      Navigator.pop(
-        context,
-        {
-          'title': title,
-          'amount': amount,
-          'category': category,
-          'type': type,
-        },
-      );
-
-      return;
-    }
+    final title = titleController.text.trim();
+    final category = categoryController.text.trim();
+    final amountText = amountController.text.trim().replaceAll(',', '.');
+    final amount = double.parse(amountText);
 
     setState(() {
       isSaving = true;
     });
 
     try {
-      final transaction = Transaction(
-        id: 0,
-        title: title,
-        description: '',
-        amount: amount,
-        category: category,
-        date: DateTime.now(),
-        type: type == 'Ingreso'
-            ? TransactionType.income
-            : TransactionType.expense,
-      );
+      if (isEditing) {
+        // LÓGICA DE ACTUALIZACIÓN (PUT)
+        final updatedTransaction = Transaction(
+          id: widget.transactionToEdit!.id,
+          title: title,
+          description: widget.transactionToEdit!.description,
+          amount: amount,
+          category: category,
+          date: widget.transactionToEdit!.date,
+          type: type == 'Ingreso'
+              ? TransactionType.income
+              : TransactionType.expense,
+        );
 
-      await transactionService.createTransaction(
-        transaction,
-      );
+        await transactionService.updateTransaction(
+          widget.transactionToEdit!.id!,
+          updatedTransaction,
+        );
 
-      if (!mounted) {
-        return;
-      }
+        if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Movimiento guardado correctamente',
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Movimiento actualizado correctamente'),
           ),
-        ),
-      );
+        );
+      } else {
+        // LÓGICA DE CREACIÓN (POST)
+        final newTransaction = Transaction(
+          id: 0,
+          title: title,
+          description: '',
+          amount: amount,
+          category: category,
+          date: DateTime.now(),
+          type: type == 'Ingreso'
+              ? TransactionType.income
+              : TransactionType.expense,
+        );
 
-      Navigator.pop(
-        context,
-        true,
-      );
-    } catch (e) {
-      if (!mounted) {
-        return;
+        await transactionService.createTransaction(newTransaction);
+
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Movimiento guardado correctamente'),
+          ),
+        );
       }
+
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
 
       setState(() {
         isSaving = false;
@@ -148,9 +134,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'No se pudo guardar el movimiento: $e',
-          ),
+          content: Text('Error al guardar: $e'),
         ),
       );
     }
@@ -161,263 +145,137 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          isEditing
-              ? 'Editar movimiento'
-              : 'Nuevo movimiento',
+          isEditing ? 'Editar movimiento' : 'Nuevo movimiento',
         ),
       ),
-
       body: SafeArea(
         child: SingleChildScrollView(
-          padding:
-              const EdgeInsets.all(16),
-
+          padding: const EdgeInsets.all(16),
           child: Form(
             key: formKey,
-
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.stretch,
-
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 DropdownButtonFormField<String>(
                   value: type,
-
-                  decoration:
-                      const InputDecoration(
+                  decoration: const InputDecoration(
                     labelText: 'Tipo',
-                    border:
-                        OutlineInputBorder(),
-                    prefixIcon: Icon(
-                      Icons.swap_vert,
-                    ),
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.swap_vert),
                   ),
-
                   items: const [
                     DropdownMenuItem(
                       value: 'Ingreso',
-                      child: Text(
-                        'Ingreso',
-                      ),
+                      child: Text('Ingreso'),
                     ),
                     DropdownMenuItem(
                       value: 'Gasto',
-                      child: Text(
-                        'Gasto',
-                      ),
+                      child: Text('Gasto'),
                     ),
                   ],
-
                   onChanged: (value) {
-                    if (value == null) {
-                      return;
-                    }
-
+                    if (value == null) return;
                     setState(() {
                       type = value;
                     });
                   },
                 ),
-
-                const SizedBox(
-                  height: 18,
-                ),
-
+                const SizedBox(height: 18),
                 TextFormField(
-                  controller:
-                      titleController,
-
-                  textCapitalization:
-                      TextCapitalization
-                          .sentences,
-
+                  controller: titleController,
+                  textCapitalization: TextCapitalization.sentences,
                   maxLength: 40,
-
-                  decoration:
-                      const InputDecoration(
+                  decoration: const InputDecoration(
                     labelText: 'Título',
-                    hintText:
-                        'Ej. Comida',
-                    border:
-                        OutlineInputBorder(),
-                    prefixIcon: Icon(
-                      Icons
-                          .description_outlined,
-                    ),
+                    hintText: 'Ej. Comida',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.description_outlined),
                   ),
-
                   validator: (value) {
-                    if (value == null ||
-                        value.trim().isEmpty) {
+                    if (value == null || value.trim().isEmpty) {
                       return 'Escribe un título';
                     }
-
-                    if (value.trim().length <
-                        2) {
+                    if (value.trim().length < 2) {
                       return 'El título es demasiado corto';
                     }
-
                     return null;
                   },
                 ),
-
-                const SizedBox(
-                  height: 10,
-                ),
-
+                const SizedBox(height: 10),
                 TextFormField(
-                  controller:
-                      amountController,
-
-                  keyboardType:
-                      const TextInputType
-                          .numberWithOptions(
+                  controller: amountController,
+                  keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
                   ),
-
                   inputFormatters: [
-                    FilteringTextInputFormatter
-                        .allow(
-                      RegExp(
-                        r'^\d*[.,]?\d{0,2}',
-                      ),
+                    FilteringTextInputFormatter.allow(
+                      RegExp(r'^\d*[.,]?\d{0,2}'),
                     ),
                   ],
-
-                  decoration:
-                      const InputDecoration(
+                  decoration: const InputDecoration(
                     labelText: 'Monto',
                     hintText: '0.00',
                     prefixText: '\$ ',
-                    border:
-                        OutlineInputBorder(),
-                    prefixIcon: Icon(
-                      Icons
-                          .attach_money,
-                    ),
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.attach_money),
                   ),
-
                   validator: (value) {
-                    if (value == null ||
-                        value.trim().isEmpty) {
+                    if (value == null || value.trim().isEmpty) {
                       return 'Escribe un monto';
                     }
-
-                    final text =
-                        value
-                            .trim()
-                            .replaceAll(
-                              ',',
-                              '.',
-                            );
-
-                    final amount =
-                        double.tryParse(
-                      text,
-                    );
-
+                    final text = value.trim().replaceAll(',', '.');
+                    final amount = double.tryParse(text);
                     if (amount == null) {
                       return 'Escribe un monto válido';
                     }
-
                     if (amount <= 0) {
                       return 'El monto debe ser mayor que 0';
                     }
-
                     return null;
                   },
                 ),
-
-                const SizedBox(
-                  height: 18,
-                ),
-
+                const SizedBox(height: 18),
                 TextFormField(
-                  controller:
-                      categoryController,
-
-                  textCapitalization:
-                      TextCapitalization
-                          .words,
-
+                  controller: categoryController,
+                  textCapitalization: TextCapitalization.words,
                   maxLength: 30,
-
-                  decoration:
-                      const InputDecoration(
-                    labelText:
-                        'Categoría',
-                    hintText:
-                        'Ej. Comida, Transporte...',
-                    border:
-                        OutlineInputBorder(),
-                    prefixIcon: Icon(
-                      Icons
-                          .category_outlined,
-                    ),
+                  decoration: const InputDecoration(
+                    labelText: 'Categoría',
+                    hintText: 'Ej. Comida, Transporte...',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.category_outlined),
                   ),
-
                   validator: (value) {
-                    if (value == null ||
-                        value.trim().isEmpty) {
+                    if (value == null || value.trim().isEmpty) {
                       return 'Escribe una categoría';
                     }
-
-                    if (value.trim().length <
-                        2) {
+                    if (value.trim().length < 2) {
                       return 'La categoría es demasiado corta';
                     }
-
                     return null;
                   },
                 ),
-
-                const SizedBox(
-                  height: 12,
-                ),
-
+                const SizedBox(height: 12),
                 FilledButton.icon(
-                  onPressed:
-                      isSaving
-                          ? null
-                          : saveTransaction,
-
+                  onPressed: isSaving ? null : saveTransaction,
                   icon: Icon(
-                    isEditing
-                        ? Icons
-                            .save_outlined
-                        : Icons.add,
+                    isEditing ? Icons.save_outlined : Icons.add,
                   ),
-
                   label: Padding(
-                    padding:
-                        const EdgeInsets
-                            .symmetric(
-                      vertical: 14,
-                    ),
-
+                    padding: const EdgeInsets.symmetric(vertical: 14),
                     child: Text(
-                      isEditing
-                          ? 'Guardar cambios'
-                          : 'Guardar movimiento',
+                      isEditing ? 'Guardar cambios' : 'Guardar movimiento',
                     ),
                   ),
                 ),
-
-                const SizedBox(
-                  height: 10,
-                ),
-
+                const SizedBox(height: 10),
                 TextButton(
                   onPressed: isSaving
                       ? null
                       : () {
-                          Navigator.pop(
-                            context,
-                          );
+                          Navigator.pop(context);
                         },
-                  child: const Text(
-                    'Cancelar',
-                  ),
+                  child: const Text('Cancelar'),
                 ),
               ],
             ),

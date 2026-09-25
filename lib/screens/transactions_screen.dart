@@ -8,13 +8,11 @@ class TransactionsScreen extends StatefulWidget {
   const TransactionsScreen({super.key});
 
   @override
-  State<TransactionsScreen> createState() =>
-      _TransactionsScreenState();
+  State<TransactionsScreen> createState() => _TransactionsScreenState();
 }
 
 class _TransactionsScreenState extends State<TransactionsScreen> {
-  final TransactionService transactionService =
-      TransactionService();
+  final TransactionService transactionService = TransactionService();
 
   List<Transaction> transactions = [];
 
@@ -34,8 +32,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     });
 
     try {
-      final savedTransactions =
-          await transactionService.loadTransactions();
+      final savedTransactions = await transactionService.loadTransactions();
 
       if (!mounted) {
         return;
@@ -193,8 +190,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       itemBuilder: (context, index) {
         final transaction = transactions[index];
 
-        final isIncome =
-            transaction.type == TransactionType.income;
+        final isIncome = transaction.type == TransactionType.income;
 
         return Dismissible(
           key: Key(transaction.id.toString()),
@@ -219,13 +215,11 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                   ),
                   actions: [
                     TextButton(
-                      onPressed: () =>
-                          Navigator.of(context).pop(false),
+                      onPressed: () => Navigator.of(context).pop(false),
                       child: const Text("Cancelar"),
                     ),
                     TextButton(
-                      onPressed: () =>
-                          Navigator.of(context).pop(true),
+                      onPressed: () => Navigator.of(context).pop(true),
                       child: const Text(
                         "Eliminar",
                         style: TextStyle(color: Colors.red),
@@ -238,15 +232,13 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           },
           onDismissed: (direction) async {
             try {
-              await transactionService
-                  .deleteTransaction(transaction.id!);
+              await transactionService.deleteTransaction(transaction.id!);
 
               if (!mounted) return;
 
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content:
-                      Text('Movimiento eliminado correctamente'),
+                  content: Text('Movimiento eliminado correctamente'),
                 ),
               );
             } catch (e) {
@@ -263,15 +255,28 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           child: Card(
             margin: const EdgeInsets.only(bottom: 12),
             child: ListTile(
+              // AGREGADO: Al tocar la tarjeta se abre la pantalla de edición con los datos cargados
+              onTap: () async {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => AddTransactionScreen(
+                      transactionToEdit: transaction,
+                    ),
+                  ),
+                );
+
+                if (result == true) {
+                  loadTransactions();
+                }
+              },
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 16,
                 vertical: 8,
               ),
               leading: CircleAvatar(
                 child: Icon(
-                  isIncome
-                      ? Icons.arrow_upward
-                      : Icons.arrow_downward,
+                  isIncome ? Icons.arrow_upward : Icons.arrow_downward,
                 ),
               ),
               title: Text(
@@ -284,11 +289,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 4),
-
                   Text(transaction.category),
-
                   const SizedBox(height: 2),
-
                   Text(
                     '${transaction.date.day}/${transaction.date.month}/${transaction.date.year}',
                   ),
@@ -298,9 +300,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                 '${isIncome ? '+' : '-'}${formatMoney(transaction.amount)}',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
-                  color: isIncome
-                      ? Colors.green
-                      : Colors.red,
+                  color: isIncome ? Colors.green : Colors.red,
                 ),
               ),
             ),
